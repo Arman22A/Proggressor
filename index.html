@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#f7f8f3">
     <title>Месяц прогресса</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml">
-    <link rel="manifest" href="manifest.webmanifest?v=18">
-    <link rel="stylesheet" href="styles.css?v=18">
+    <link rel="manifest" href="manifest.webmanifest?v=20">
+    <link rel="stylesheet" href="styles.css?v=20">
   </head>
   <body>
     <main class="app-shell">
@@ -97,27 +97,11 @@
 
         <section class="profile-section" aria-label="Мои цели">
           <h3>Мои цели</h3>
-          <div class="goal-band">
-            <div class="goal-item">
-              <span class="goal-kicker">Спорт</span>
-              <strong>3 раза в неделю</strong>
-            </div>
-            <div class="goal-item">
-              <span class="goal-kicker">Английский</span>
-              <strong>15 минут в день</strong>
-            </div>
-            <div class="goal-item">
-              <span class="goal-kicker">Веб-дизайн</span>
-              <strong>1 час в день</strong>
-            </div>
-            <div class="goal-item">
-              <span class="goal-kicker">Продукт</span>
-              <strong>первые клиенты</strong>
-            </div>
-            <div class="goal-item">
-              <span class="goal-kicker">MVP</span>
-              <strong>чат-бот для вуза</strong>
-            </div>
+          <div class="goal-band editable-goals" id="goalBand"></div>
+          <div class="goal-add-row">
+            <input id="newGoalKicker" type="text" autocomplete="off" placeholder="Категория">
+            <input id="newGoalTitle" type="text" autocomplete="off" placeholder="Новая цель">
+            <button class="secondary-button" id="addGoalButton" type="button">Добавить</button>
           </div>
         </section>
 
@@ -136,16 +120,16 @@
               <input id="syncKeyInput" type="password" autocomplete="off" placeholder="eyJ...">
             </label>
             <label class="sync-field" for="syncCodeInput">
-              <span>Код синхронизации</span>
+              <span>Облачный пароль</span>
               <input id="syncCodeInput" type="text" autocomplete="off" placeholder="arman-progress-2026">
             </label>
           </div>
           <div class="sync-actions">
-            <button class="secondary-button" id="saveSyncSettings" type="button">Сохранить настройки</button>
-            <button class="secondary-button" id="pullSyncButton" type="button">Загрузить</button>
-            <button class="primary-button" id="pushSyncButton" type="button">Сохранить в облако</button>
+            <button class="primary-button" id="saveSyncSettings" type="button">Включить автосинхронизацию</button>
+            <button class="secondary-button" id="pullSyncButton" type="button">Обновить сейчас</button>
+            <button class="secondary-button" id="pushSyncButton" type="button">Сохранить сейчас</button>
           </div>
-          <p class="sync-status" id="syncStatus">Сначала подключим облако, после этого прогресс будет один на ноутбуке и телефоне.</p>
+          <p class="sync-status" id="syncStatus">Один раз введи Supabase URL, ключ и облачный пароль. После этого изменения будут синхронизироваться автоматически.</p>
         </section>
       </section>
     </div>
@@ -159,6 +143,7 @@
             <h2 id="selectedDate">4 июля</h2>
           </div>
           <div class="day-actions">
+            <button class="secondary-button compact-button" id="editDayButton" type="button">Изменить</button>
             <span class="load-pill not-started" id="loadPill">Не начато</span>
             <button class="icon-button close-button" id="closeDay" type="button" aria-label="Закрыть день" title="Закрыть">×</button>
           </div>
@@ -171,6 +156,25 @@
 
         <div class="task-list" id="taskList"></div>
 
+        <div class="day-editor" id="dayEditor" hidden>
+          <label class="editor-field" for="dayFocusInput">
+            <span>Фокус дня</span>
+            <input id="dayFocusInput" type="text" autocomplete="off">
+          </label>
+          <div class="task-editor-list" id="taskEditorList"></div>
+          <div class="task-add-row">
+            <input id="newTaskTitle" type="text" autocomplete="off" placeholder="Новая задача">
+            <input id="newTaskMeta" type="text" autocomplete="off" placeholder="Описание или время">
+            <select id="newTaskType" aria-label="Тип задачи">
+              <option value="habit">Привычка</option>
+              <option value="work">Работа</option>
+              <option value="sport">Спорт</option>
+            </select>
+            <button class="secondary-button" id="addTaskButton" type="button">Добавить</button>
+          </div>
+          <button class="text-button danger-text" id="resetDayButton" type="button">Вернуть план дня по умолчанию</button>
+        </div>
+
         <div class="notes-area">
           <label for="energyRange">Энергия: <strong id="energyValue">5</strong>/10</label>
           <input id="energyRange" type="range" min="1" max="10" value="5">
@@ -180,6 +184,6 @@
       </section>
     </div>
 
-    <script src="script.js?v=18"></script>
+    <script src="script.js?v=20"></script>
   </body>
 </html>

@@ -23,6 +23,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -519,6 +523,103 @@ h2 {
   font-weight: 600;
 }
 
+.editable-goals {
+  margin-bottom: 10px;
+}
+
+.editable-goal-item {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding-right: 42px;
+}
+
+.goal-kicker-input,
+.goal-title-input,
+.editor-field input,
+.task-edit-row input,
+.task-add-row input,
+.task-add-row select,
+.goal-add-row input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
+}
+
+.goal-kicker-input {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.goal-title-input {
+  font-weight: 800;
+}
+
+.goal-add-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.compact-button {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.day-editor {
+  display: grid;
+  gap: 12px;
+  margin: -2px 0 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.editor-field,
+.task-editor-list {
+  display: grid;
+  gap: 8px;
+}
+
+.editor-field span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.task-edit-row,
+.task-add-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(150px, 1.2fr) 112px 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-add-row {
+  grid-template-columns: minmax(120px, 1fr) minmax(150px, 1.2fr) 112px auto;
+}
+
+.remove-button {
+  width: 36px;
+  height: 36px;
+  box-shadow: none;
+  color: #c5221f;
+  font-size: 1.2rem;
+}
+
+.danger-text {
+  width: fit-content;
+  color: #c5221f;
+}
+
 .section-title-row {
   display: flex;
   align-items: center;
@@ -787,6 +888,20 @@ textarea:focus,
 
   .goal-band {
     grid-template-columns: 1fr;
+  }
+
+  .goal-add-row,
+  .task-edit-row,
+  .task-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .editable-goal-item {
+    padding-right: 0;
+  }
+
+  .editable-goal-item .remove-button {
+    justify-self: start;
   }
 
   .sync-form {

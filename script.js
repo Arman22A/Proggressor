@@ -11,6 +11,11 @@
   const days = buildDays();
   let selectedKey = formatKey(today);
   let activeModal = null;
+  let isEditingDay = false;
+  let cloudSaveTimer = null;
+  let cloudPullTimer = null;
+  let isApplyingCloud = false;
+  let isCloudBusy = false;
 
   const calendarGrid = document.querySelector("#calendarGrid");
   const dayModal = document.querySelector("#dayModal");
@@ -32,6 +37,15 @@
   const loadPill = document.querySelector("#loadPill");
   const dayFocus = document.querySelector("#dayFocus");
   const taskList = document.querySelector("#taskList");
+  const editDayButton = document.querySelector("#editDayButton");
+  const dayEditor = document.querySelector("#dayEditor");
+  const dayFocusInput = document.querySelector("#dayFocusInput");
+  const taskEditorList = document.querySelector("#taskEditorList");
+  const newTaskTitle = document.querySelector("#newTaskTitle");
+  const newTaskMeta = document.querySelector("#newTaskMeta");
+  const newTaskType = document.querySelector("#newTaskType");
+  const addTaskButton = document.querySelector("#addTaskButton");
+  const resetDayButton = document.querySelector("#resetDayButton");
   const energyRange = document.querySelector("#energyRange");
   const energyValue = document.querySelector("#energyValue");
   const dayNotes = document.querySelector("#dayNotes");
@@ -41,6 +55,10 @@
   const streakScore = document.querySelector("#streakScore");
   const topStreakScore = document.querySelector("#topStreakScore");
   const streakFlame = document.querySelector("#streakFlame");
+  const goalBand = document.querySelector("#goalBand");
+  const newGoalKicker = document.querySelector("#newGoalKicker");
+  const newGoalTitle = document.querySelector("#newGoalTitle");
+  const addGoalButton = document.querySelector("#addGoalButton");
   const syncUrlInput = document.querySelector("#syncUrlInput");
   const syncKeyInput = document.querySelector("#syncKeyInput");
   const syncCodeInput = document.querySelector("#syncCodeInput");
@@ -51,9 +69,11 @@
 
   renderCalendar();
   renderStats();
+  renderGoals();
   renderProfilePhoto();
   renderSyncSettings();
   normalizeStoredProfilePhoto();
+  startAutoSync();
 
   profileButton.addEventListener("click", openProfile);
   avatarButton.addEventListener("click", () => photoInput.click());
@@ -64,6 +84,11 @@
   modalBackdrop.addEventListener("click", closeDayModal);
   closeProfile.addEventListener("click", closeProfileModal);
   profileBackdrop.addEventListener("click", closeProfileModal);
+  editDayButton.addEventListener("click", toggleDayEditor);
+  dayFocusInput.addEventListener("input", updateDayFocus);
+  addTaskButton.addEventListener("click", addCustomTask);
+  resetDayButton.addEventListener("click", resetDayPlan);
+  addGoalButton.addEventListener("click", addGoal);
   saveSyncSettingsButton.addEventListener("click", saveSyncSettings);
   pullSyncButton.addEventListener("click", pullCloudState);
   pushSyncButton.addEventListener("click", pushCloudState);
@@ -261,6 +286,49 @@
     return { title: pool[index][0], meta: pool[index][1] };
   }
 
+  function effectiveDay(day) {
+    const custom = state.dayPlans && state.dayPlans[day.key];
+    if (!custom) return day;
+    return {
+      ...day,
+      focus: custom.focus || day.focus,
+      tasks: Array.isArray(custom.tasks) ? custom.tasks : day.tasks
+    };
+  }
+
+  function ensureDayPlan(key) {
+    const day = days.find((item) => item.key === key) || days[0];
+    state.dayPlans = state.dayPlans || {};
+    if (!state.dayPlans[key]) {
+      state.dayPlans[key] = {
+        focus: day.focus,
+        tasks: cloneTasks(day.tasks)
+      };
+    }
+    return state.dayPlans[key];
+  }
+
+  function cloneTasks(tasks) {
+    return tasks.map((task) => ({ ...task }));
+  }
+
+  function defaultGoals() {
+    return [
+      { id: "sport", kicker: "Спорт", title: "3 раза в неделю" },
+      { id: "english", kicker: "Английский", title: "15 минут в день" },
+      { id: "design", kicker: "Веб-дизайн", title: "1 час в день" },
+      { id: "product", kicker: "Продукт", title: "первые клиенты" },
+      { id: "mvp", kicker: "MVP", title: "чат-бот для вуза" }
+    ];
+  }
+
+  function goals() {
+    if (!Array.isArray(state.goals)) {
+      state.goals = defaultGoals();
+    }
+    return state.goals;
+  }
+
   function renderCalendar() {
     calendarGrid.innerHTML = "";
     const firstOffset = mondayIndex(startDate);
@@ -273,7 +341,8 @@
     days.forEach((day) => {
       const entry = ensureEntry(day.key);
       const button = document.createElement("button");
-      const status = dayStatus(day, entry);
+      const visibleDay = effectiveDay(day);
+      const status = dayStatus(visibleDay, entry);
       button.type = "button";
       button.className = `day-cell is-${status.kind} ${day.key === formatKey(today) ? "is-today" : ""}`;
       button.setAttribute("aria-label", `${formatDate(day.date)}, ${weekdayNames[day.date.getDay()]}, ${status.label}`);
@@ -290,6 +359,7 @@
   function openDay(key) {
     selectedKey = key;
     activeModal = "day";
+    isEditingDay = false;
     renderDay();
     dayModal.classList.add("is-open");
     dayModal.setAttribute("aria-hidden", "false");
@@ -307,6 +377,7 @@
   function openProfile() {
     activeModal = "profile";
     renderStats();
+    renderGoals();
     renderSyncSettings();
     profileModal.classList.add("is-open");
     profileModal.setAttribute("aria-hidden", "false");
@@ -554,14 +625,18 @@
   }
 
   function renderDay() {
-    const day = days.find((item) => item.key === selectedKey) || days[0];
-    const entry = ensureEntry(day.key);
+    const sourceDay = days.find((item) => item.key === selectedKey) || days[0];
+    const day = effectiveDay(sourceDay);
+    const entry = ensureEntry(sourceDay.key);
     const status = dayStatus(day, entry);
-    selectedWeekday.textContent = weekdayNames[day.date.getDay()];
-    selectedDate.textContent = formatDate(day.date);
+    selectedWeekday.textContent = weekdayNames[sourceDay.date.getDay()];
+    selectedDate.textContent = formatDate(sourceDay.date);
     loadPill.textContent = status.label;
     loadPill.className = `load-pill ${status.kind}`;
     dayFocus.textContent = day.focus;
+    editDayButton.textContent = isEditingDay ? "Готово" : "Изменить";
+    dayEditor.hidden = !isEditingDay;
+    dayFocusInput.value = day.focus;
     energyRange.value = entry.energy;
     energyValue.textContent = entry.energy;
     dayNotes.value = entry.notes || "";
@@ -587,6 +662,111 @@
       });
       taskList.appendChild(row);
     });
+
+    renderTaskEditor(day);
+  }
+
+  function renderTaskEditor(day) {
+    taskEditorList.innerHTML = "";
+    if (!isEditingDay) return;
+
+    day.tasks.forEach((task, index) => {
+      const row = document.createElement("div");
+      row.className = "task-edit-row";
+      row.innerHTML = `
+        <input class="task-title-input" type="text" value="${escapeAttribute(task.title)}" aria-label="Название задачи">
+        <input class="task-meta-input" type="text" value="${escapeAttribute(task.meta)}" aria-label="Описание задачи">
+        <select class="task-type-input" aria-label="Тип задачи">
+          <option value="habit">Привычка</option>
+          <option value="work">Работа</option>
+          <option value="sport">Спорт</option>
+        </select>
+        <button class="icon-button remove-button" type="button" aria-label="Удалить задачу" title="Удалить">×</button>
+      `;
+
+      const titleInput = row.querySelector(".task-title-input");
+      const metaInput = row.querySelector(".task-meta-input");
+      const typeInput = row.querySelector(".task-type-input");
+      const removeButton = row.querySelector(".remove-button");
+      typeInput.value = task.type;
+
+      titleInput.addEventListener("input", () => updateTaskField(index, "title", titleInput.value));
+      metaInput.addEventListener("input", () => updateTaskField(index, "meta", metaInput.value));
+      typeInput.addEventListener("change", () => updateTaskField(index, "type", typeInput.value));
+      removeButton.addEventListener("click", () => removeTask(index));
+      taskEditorList.appendChild(row);
+    });
+  }
+
+  function toggleDayEditor() {
+    isEditingDay = !isEditingDay;
+    if (isEditingDay) ensureDayPlan(selectedKey);
+    renderDay();
+  }
+
+  function updateDayFocus() {
+    const plan = ensureDayPlan(selectedKey);
+    plan.focus = dayFocusInput.value;
+    saveState();
+    renderCalendar();
+    dayFocus.textContent = plan.focus;
+  }
+
+  function updateTaskField(index, field, value) {
+    const plan = ensureDayPlan(selectedKey);
+    if (!plan.tasks[index]) return;
+    plan.tasks[index][field] = value;
+    saveState();
+    renderDay();
+    renderCalendar();
+    renderStats();
+  }
+
+  function addCustomTask() {
+    const title = newTaskTitle.value.trim();
+    if (!title) return;
+
+    const plan = ensureDayPlan(selectedKey);
+    const id = `custom-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    plan.tasks.push({
+      id,
+      title,
+      meta: newTaskMeta.value.trim(),
+      type: newTaskType.value
+    });
+
+    newTaskTitle.value = "";
+    newTaskMeta.value = "";
+    newTaskType.value = "habit";
+    saveState();
+    renderDay();
+    renderCalendar();
+    renderStats();
+  }
+
+  function removeTask(index) {
+    const plan = ensureDayPlan(selectedKey);
+    const removed = plan.tasks[index];
+    plan.tasks.splice(index, 1);
+    if (removed) {
+      const entry = ensureEntry(selectedKey);
+      delete entry.tasks[removed.id];
+    }
+    saveState();
+    renderDay();
+    renderCalendar();
+    renderStats();
+  }
+
+  function resetDayPlan() {
+    if (state.dayPlans) {
+      delete state.dayPlans[selectedKey];
+    }
+    isEditingDay = false;
+    saveState();
+    renderDay();
+    renderCalendar();
+    renderStats();
   }
 
   function renderStats() {
@@ -599,14 +779,15 @@
     let currentStreak = 0;
 
     days.forEach((day) => {
+      const visibleDay = effectiveDay(day);
       const entry = ensureEntry(day.key);
-      const required = day.tasks.filter((task) => task.type === "habit");
+      const required = visibleDay.tasks.filter((task) => task.type === "habit");
       if (day.date <= today) {
-        const requiredDone = required.every((task) => entry.tasks[task.id]);
+        const requiredDone = required.length > 0 && required.every((task) => entry.tasks[task.id]);
         currentStreak = requiredDone ? currentStreak + 1 : 0;
       }
 
-      day.tasks.forEach((task) => {
+      visibleDay.tasks.forEach((task) => {
         if (task.type === "habit") {
           habitTotal += 1;
           if (entry.tasks[task.id]) habitDone += 1;
@@ -631,6 +812,59 @@
     streakFlame.className.baseVal = `flame-icon ${streakLevelClass(currentStreak)}`;
   }
 
+  function renderGoals() {
+    goalBand.innerHTML = "";
+
+    goals().forEach((goal, index) => {
+      const item = document.createElement("div");
+      item.className = "goal-item editable-goal-item";
+      item.innerHTML = `
+        <input class="goal-kicker-input" type="text" value="${escapeAttribute(goal.kicker)}" aria-label="Категория цели">
+        <input class="goal-title-input" type="text" value="${escapeAttribute(goal.title)}" aria-label="Текст цели">
+        <button class="icon-button remove-button" type="button" aria-label="Удалить цель" title="Удалить">×</button>
+      `;
+
+      const kickerInput = item.querySelector(".goal-kicker-input");
+      const titleInput = item.querySelector(".goal-title-input");
+      const removeButton = item.querySelector(".remove-button");
+
+      kickerInput.addEventListener("input", () => updateGoal(index, "kicker", kickerInput.value));
+      titleInput.addEventListener("input", () => updateGoal(index, "title", titleInput.value));
+      removeButton.addEventListener("click", () => removeGoal(index));
+      goalBand.appendChild(item);
+    });
+  }
+
+  function updateGoal(index, field, value) {
+    const list = goals();
+    if (!list[index]) return;
+    list[index][field] = value;
+    saveState();
+  }
+
+  function addGoal() {
+    const kicker = newGoalKicker.value.trim();
+    const title = newGoalTitle.value.trim();
+    if (!kicker || !title) return;
+
+    goals().push({
+      id: `goal-${Date.now()}`,
+      kicker,
+      title
+    });
+
+    newGoalKicker.value = "";
+    newGoalTitle.value = "";
+    saveState();
+    renderGoals();
+  }
+
+  function removeGoal(index) {
+    goals().splice(index, 1);
+    saveState();
+    renderGoals();
+  }
+
   function renderSyncSettings() {
     syncUrlInput.value = state.syncUrl || "";
     syncKeyInput.value = state.syncKey || "";
@@ -638,14 +872,20 @@
   }
 
   function saveSyncSettings() {
+    storeSyncSettings();
+    setSyncStatus("Автосинхронизация включена. Теперь изменения будут сохраняться в облако сами.", "ok");
+    pullCloudState({ auto: true, pushIfEmpty: true });
+  }
+
+  function storeSyncSettings() {
     state.syncUrl = cleanUrl(syncUrlInput.value);
     state.syncKey = syncKeyInput.value.trim();
     state.syncCode = syncCodeInput.value.trim();
-    saveState();
-    setSyncStatus("Настройки сохранены. Теперь можно сохранить прогресс в облако или загрузить его на другом устройстве.", "ok");
+    saveState({ skipCloud: true });
+    startAutoSync();
   }
 
-  function getSyncSettings() {
+  function getSyncSettings(options = {}) {
     const settings = {
       url: cleanUrl(syncUrlInput.value || state.syncUrl || ""),
       key: (syncKeyInput.value || state.syncKey || "").trim(),
@@ -653,20 +893,28 @@
     };
 
     if (!settings.url || !settings.key || !settings.code) {
-      setSyncStatus("Нужны Supabase URL, anon key и один код синхронизации для ноутбука и телефона.", "error");
+      if (!options.silent) {
+        setSyncStatus("Нужны Supabase URL, ключ и один облачный пароль для телефона и ноутбука.", "error");
+      }
       return null;
     }
 
     return settings;
   }
 
-  async function pushCloudState() {
-    const settings = getSyncSettings();
+  async function pushCloudState(options = {}) {
+    if (isCloudBusy && options.auto) return;
+    const settings = getSyncSettings({ silent: options.auto });
     if (!settings) return;
 
-    saveSyncSettings();
+    if (!options.auto) {
+      storeSyncSettings();
+    }
+
+    isCloudBusy = true;
     setSyncBusy(true);
-    setSyncStatus("Сохраняю прогресс в облако...", "busy");
+    if (!options.auto) setSyncStatus("Сохраняю прогресс в облако...", "busy");
+    const syncedAt = new Date().toISOString();
 
     try {
       const response = await fetch(`${settings.url}/rest/v1/progress_sync?on_conflict=sync_code`, {
@@ -675,26 +923,40 @@
         body: JSON.stringify({
           sync_code: settings.code,
           payload: exportProgressState(),
-          updated_at: new Date().toISOString()
+          updated_at: syncedAt
         })
       });
 
       if (!response.ok) throw new Error(await response.text());
-      setSyncStatus("Готово. Теперь на телефоне введи эти же настройки и нажми «Загрузить».", "ok");
+      state.cloudUpdatedAt = syncedAt;
+      localStorage.setItem(storageKey, JSON.stringify(state));
+      if (!options.auto) {
+        setSyncStatus("Готово. Автосинхронизация работает: телефон и ноутбук будут подтягивать изменения сами.", "ok");
+      } else {
+        setSyncStatus("Сохранено в облако.", "ok");
+      }
     } catch (error) {
-      setSyncStatus("Не получилось сохранить в облако. Проверь таблицу Supabase, URL и anon key.", "error");
+      if (!options.auto) {
+        setSyncStatus("Не получилось сохранить в облако. Проверь Supabase URL, ключ и таблицу.", "error");
+      }
     } finally {
+      isCloudBusy = false;
       setSyncBusy(false);
     }
   }
 
-  async function pullCloudState() {
-    const settings = getSyncSettings();
+  async function pullCloudState(options = {}) {
+    if (isCloudBusy && options.auto) return;
+    const settings = getSyncSettings({ silent: options.auto });
     if (!settings) return;
 
-    saveSyncSettings();
+    if (!options.auto) {
+      storeSyncSettings();
+    }
+
+    isCloudBusy = true;
     setSyncBusy(true);
-    setSyncStatus("Загружаю прогресс из облака...", "busy");
+    if (!options.auto) setSyncStatus("Загружаю прогресс из облака...", "busy");
 
     try {
       const response = await fetch(
@@ -705,15 +967,30 @@
       if (!response.ok) throw new Error(await response.text());
       const rows = await response.json();
       if (!rows.length || !rows[0].payload) {
-        setSyncStatus("В облаке пока нет прогресса для этого кода. Сначала сохрани его с ноутбука.", "error");
+        if (options.pushIfEmpty) {
+          isCloudBusy = false;
+          setSyncBusy(false);
+          pushCloudState({ auto: true });
+          return;
+        }
+        if (!options.auto) {
+          setSyncStatus("В облаке пока нет прогресса для этого пароля. Сначала сохрани изменения на одном устройстве.", "error");
+        }
         return;
       }
 
-      applyCloudState(rows[0].payload, settings);
-      setSyncStatus("Прогресс загружен. Календарь, профиль и фото обновлены.", "ok");
+      if (!state.cloudUpdatedAt || new Date(rows[0].updated_at) > new Date(state.cloudUpdatedAt)) {
+        applyCloudState(rows[0].payload, settings, rows[0].updated_at);
+        setSyncStatus(options.auto ? "Подтянул свежие изменения из облака." : "Прогресс загружен. Календарь, профиль и фото обновлены.", "ok");
+      } else if (!options.auto) {
+        setSyncStatus("У тебя уже свежая версия прогресса.", "ok");
+      }
     } catch (error) {
-      setSyncStatus("Не получилось загрузить прогресс. Проверь подключение и настройки Supabase.", "error");
+      if (!options.auto) {
+        setSyncStatus("Не получилось загрузить прогресс. Проверь подключение и настройки Supabase.", "error");
+      }
     } finally {
+      isCloudBusy = false;
       setSyncBusy(false);
     }
   }
@@ -723,22 +1000,48 @@
     delete copy.syncUrl;
     delete copy.syncKey;
     delete copy.syncCode;
+    delete copy.cloudUpdatedAt;
     return copy;
   }
 
-  function applyCloudState(payload, settings) {
+  function applyCloudState(payload, settings, cloudUpdatedAt) {
+    isApplyingCloud = true;
     Object.keys(state).forEach((key) => delete state[key]);
     Object.assign(state, payload, {
       syncUrl: settings.url,
       syncKey: settings.key,
-      syncCode: settings.code
+      syncCode: settings.code,
+      cloudUpdatedAt
     });
-    saveState();
+    saveState({ skipCloud: true });
+    isApplyingCloud = false;
     renderCalendar();
     renderStats();
+    renderGoals();
     renderProfilePhoto();
     renderSyncSettings();
     if (activeModal === "day") renderDay();
+  }
+
+  function startAutoSync() {
+    if (cloudPullTimer) {
+      clearInterval(cloudPullTimer);
+      cloudPullTimer = null;
+    }
+
+    if (!getSyncSettings({ silent: true })) return;
+
+    cloudPullTimer = setInterval(() => {
+      pullCloudState({ auto: true });
+    }, 20000);
+  }
+
+  function scheduleCloudSave() {
+    if (!getSyncSettings({ silent: true }) || isApplyingCloud) return;
+    clearTimeout(cloudSaveTimer);
+    cloudSaveTimer = setTimeout(() => {
+      pushCloudState({ auto: true });
+    }, 900);
   }
 
   function cloudHeaders(settings, extra = {}) {
@@ -789,9 +1092,17 @@
 
   function dayStatus(day, entry) {
     const done = day.tasks.filter((task) => entry.tasks[task.id]).length;
-    if (done === day.tasks.length) return { kind: "done", label: "Готово" };
+    if (day.tasks.length > 0 && done === day.tasks.length) return { kind: "done", label: "Готово" };
     if (done > 0) return { kind: "progress", label: "В процессе" };
     return { kind: "not-started", label: "Не начато" };
+  }
+
+  function escapeAttribute(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
   function ensureEntry(key) {
@@ -809,8 +1120,10 @@
     }
   }
 
-  function saveState() {
+  function saveState(options = {}) {
+    state.localUpdatedAt = new Date().toISOString();
     localStorage.setItem(storageKey, JSON.stringify(state));
+    if (!options.skipCloud) scheduleCloudSave();
   }
 
   function formatKey(date) {

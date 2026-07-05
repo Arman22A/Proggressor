@@ -1,4 +1,4 @@
-const cacheName = "month-progress-v18";
+const cacheName = "month-progress-v20";
 const assets = [
   "./",
   "./index.html",
