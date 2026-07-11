@@ -154,7 +154,8 @@ h2 {
 .goal-item,
 .progress-item,
 .day-panel,
-.profile-panel {
+.profile-panel,
+.task-panel {
   border: 1px solid var(--line);
   background: var(--panel);
   box-shadow: none;
@@ -174,6 +175,34 @@ h2 {
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 16px;
+}
+
+.month-title-group {
+  min-width: 0;
+}
+
+.month-navigation {
+  display: grid;
+  grid-template-columns: 38px minmax(150px, auto) 38px auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.month-navigation h2 {
+  margin: 0;
+  text-align: center;
+}
+
+.month-arrow {
+  width: 38px;
+  height: 38px;
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.today-button {
+  margin-left: 4px;
 }
 
 .streak-chip {
@@ -366,7 +395,7 @@ h2 {
 }
 
 .goal-band {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
 .goal-item,
@@ -395,7 +424,8 @@ h2 {
 }
 
 .day-modal,
-.profile-modal {
+.profile-modal,
+.task-modal {
   position: fixed;
   inset: 0;
   z-index: 30;
@@ -408,7 +438,8 @@ h2 {
 }
 
 .day-modal.is-open,
-.profile-modal.is-open {
+.profile-modal.is-open,
+.task-modal.is-open {
   opacity: 1;
   pointer-events: auto;
 }
@@ -421,7 +452,8 @@ h2 {
 }
 
 .day-panel,
-.profile-panel {
+.profile-panel,
+.task-panel {
   position: relative;
   width: min(620px, 100%);
   max-height: min(86vh, 820px);
@@ -432,6 +464,81 @@ h2 {
 
 .profile-panel {
   width: min(760px, 100%);
+}
+
+.task-modal {
+  align-items: start;
+  z-index: 40;
+  padding-top: max(22px, env(safe-area-inset-top));
+}
+
+.task-panel {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: calc(100vh - 44px - env(safe-area-inset-top));
+  overflow: auto;
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.task-editor-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.task-editor-header h2 {
+  margin: 2px 0 0;
+  font-size: 1.25rem;
+}
+
+.task-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.task-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.task-form label > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.task-form input,
+.task-form textarea,
+.task-form select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
+}
+
+.task-editor-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.danger-button {
+  min-height: 42px;
+  border: 1px solid rgba(197, 34, 31, 0.32);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #c5221f;
+  background: var(--panel);
+  font: inherit;
+  font-weight: 700;
 }
 
 .profile-header {
@@ -530,8 +637,10 @@ h2 {
 .editable-goal-item {
   position: relative;
   display: grid;
+  grid-template-rows: auto auto 36px;
   gap: 8px;
-  padding-right: 42px;
+  min-width: 0;
+  padding: 14px;
 }
 
 .goal-kicker-input,
@@ -558,7 +667,13 @@ h2 {
 }
 
 .goal-title-input {
+  min-height: 42px;
+  font-size: 0.96rem;
   font-weight: 800;
+}
+
+.editable-goal-item .remove-button {
+  justify-self: start;
 }
 
 .goal-add-row {
@@ -779,6 +894,13 @@ h2 {
   line-height: 1.25;
 }
 
+.focus-line strong.is-editable {
+  border-radius: 6px;
+  outline: 2px solid rgba(26, 115, 232, 0.2);
+  outline-offset: 4px;
+  cursor: text;
+}
+
 .task-list {
   display: grid;
   gap: 10px;
@@ -794,6 +916,50 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
+}
+
+.task-row.is-editable {
+  border-color: rgba(26, 115, 232, 0.42);
+  background: rgba(26, 115, 232, 0.035);
+}
+
+.task-content-button {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.task-content-button:disabled {
+  opacity: 1;
+}
+
+.task-row.is-editable .task-content-button {
+  cursor: pointer;
+}
+
+.task-row.is-editable .task-content-button::after {
+  content: "Изменить";
+  display: block;
+  margin-top: 7px;
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.add-task-button {
+  width: 100%;
+  min-height: 46px;
+  margin: 0 0 16px;
+  border: 1px dashed rgba(26, 115, 232, 0.52);
+  border-radius: 8px;
+  color: var(--blue);
+  background: rgba(26, 115, 232, 0.045);
+  font: inherit;
+  font-weight: 750;
 }
 
 .check-button {
@@ -877,6 +1043,20 @@ textarea:focus,
     display: grid;
   }
 
+  .month-navigation {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+  }
+
+  .month-navigation h2 {
+    font-size: 1.2rem;
+  }
+
+  .today-button {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-left: 0;
+  }
+
   .streak-chip {
     width: fit-content;
     text-align: left;
@@ -932,5 +1112,20 @@ textarea:focus,
   .day-panel,
   .profile-panel {
     max-height: 88vh;
+  }
+
+  .task-modal {
+    align-items: start;
+    padding: max(12px, env(safe-area-inset-top)) 10px 10px;
+  }
+
+  .task-panel {
+    max-height: calc(100vh - 24px - env(safe-area-inset-top));
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .task-editor-actions {
+    grid-template-columns: 1fr;
   }
 }

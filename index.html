@@ -6,15 +6,15 @@
     <meta name="theme-color" content="#f7f8f3">
     <title>Месяц прогресса</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml">
-    <link rel="manifest" href="manifest.webmanifest?v=20">
-    <link rel="stylesheet" href="styles.css?v=20">
+    <link rel="manifest" href="manifest.webmanifest?v=23">
+    <link rel="stylesheet" href="styles.css?v=23">
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">4 июля - 4 августа</p>
-          <h1>Календарь месяца</h1>
+          <p class="eyebrow">Личный планировщик</p>
+          <h1>Календарь</h1>
         </div>
         <button class="icon-button profile-button" id="profileButton" type="button" aria-label="Открыть профиль" title="Профиль">
           <img id="profileButtonPhoto" alt="" hidden>
@@ -27,9 +27,14 @@
 
       <section class="calendar-panel" aria-label="Календарь">
         <div class="month-head">
-          <div>
+          <div class="month-title-group">
             <p class="eyebrow">Нажми на дату, чтобы открыть задачи</p>
-            <h2>Июль - август</h2>
+            <div class="month-navigation">
+              <button class="icon-button month-arrow" id="previousMonth" type="button" aria-label="Предыдущий месяц" title="Предыдущий месяц">‹</button>
+              <h2 id="monthTitle">Июль 2026</h2>
+              <button class="icon-button month-arrow" id="nextMonth" type="button" aria-label="Следующий месяц" title="Следующий месяц">›</button>
+              <button class="secondary-button compact-button today-button" id="todayButton" type="button">Сегодня</button>
+            </div>
           </div>
           <div class="streak-chip" aria-label="Серия">
             <svg class="flame-icon streak-level-0" id="streakFlame" aria-hidden="true" viewBox="0 0 24 24">
@@ -155,25 +160,7 @@
         </div>
 
         <div class="task-list" id="taskList"></div>
-
-        <div class="day-editor" id="dayEditor" hidden>
-          <label class="editor-field" for="dayFocusInput">
-            <span>Фокус дня</span>
-            <input id="dayFocusInput" type="text" autocomplete="off">
-          </label>
-          <div class="task-editor-list" id="taskEditorList"></div>
-          <div class="task-add-row">
-            <input id="newTaskTitle" type="text" autocomplete="off" placeholder="Новая задача">
-            <input id="newTaskMeta" type="text" autocomplete="off" placeholder="Описание или время">
-            <select id="newTaskType" aria-label="Тип задачи">
-              <option value="habit">Привычка</option>
-              <option value="work">Работа</option>
-              <option value="sport">Спорт</option>
-            </select>
-            <button class="secondary-button" id="addTaskButton" type="button">Добавить</button>
-          </div>
-          <button class="text-button danger-text" id="resetDayButton" type="button">Вернуть план дня по умолчанию</button>
-        </div>
+        <button class="add-task-button" id="addTaskButton" type="button">+ Добавить задачу</button>
 
         <div class="notes-area">
           <label for="energyRange">Энергия: <strong id="energyValue">5</strong>/10</label>
@@ -184,6 +171,41 @@
       </section>
     </div>
 
-    <script src="script.js?v=20"></script>
+    <div class="task-modal" id="taskModal" aria-hidden="true">
+      <button class="modal-backdrop" id="taskModalBackdrop" type="button" aria-label="Закрыть редактор задачи"></button>
+      <section class="task-panel" role="dialog" aria-modal="true" aria-labelledby="taskEditorTitle">
+        <div class="task-editor-header">
+          <div>
+            <p class="eyebrow" id="taskEditorEyebrow">Задача</p>
+            <h2 id="taskEditorTitle">Изменить задачу</h2>
+          </div>
+          <button class="icon-button close-button" id="closeTaskEditor" type="button" aria-label="Закрыть редактор" title="Закрыть">×</button>
+        </div>
+        <div class="task-form">
+          <label for="taskTitleInput">
+            <span>Название</span>
+            <input id="taskTitleInput" type="text" autocomplete="off">
+          </label>
+          <label for="taskMetaInput">
+            <span>Описание или время</span>
+            <textarea id="taskMetaInput" rows="3"></textarea>
+          </label>
+          <label for="taskTypeInput">
+            <span>Тип</span>
+            <select id="taskTypeInput">
+              <option value="habit">Привычка</option>
+              <option value="work">Работа</option>
+              <option value="sport">Спорт</option>
+            </select>
+          </label>
+        </div>
+        <div class="task-editor-actions">
+          <button class="primary-button" id="saveTaskButton" type="button">Сохранить изменения</button>
+          <button class="danger-button" id="deleteTaskButton" type="button">Удалить задачу</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="script.js?v=23"></script>
   </body>
 </html>

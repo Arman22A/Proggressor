@@ -1,14 +1,17 @@
 (function () {
-  const startDate = new Date(2026, 6, 4);
-  const endDate = new Date(2026, 7, 4);
-  const today = clampDate(new Date(), startDate, endDate);
+  const planStartDate = new Date(2026, 6, 4);
+  const planEndDate = new Date(2026, 7, 4);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const storageKey = "month-progress-v1";
 
   const weekdayNames = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
-  const monthNames = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа"];
+  const monthNames = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+  const calendarMonthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 
   const state = loadState();
-  const days = buildDays();
+  const plannedDays = buildPlannedDays();
+  let visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   let selectedKey = formatKey(today);
   let activeModal = null;
   let isEditingDay = false;
@@ -16,8 +19,14 @@
   let cloudPullTimer = null;
   let isApplyingCloud = false;
   let isCloudBusy = false;
+  let editingTaskIndex = null;
+  let calendarTouchStart = null;
 
   const calendarGrid = document.querySelector("#calendarGrid");
+  const monthTitle = document.querySelector("#monthTitle");
+  const previousMonthButton = document.querySelector("#previousMonth");
+  const nextMonthButton = document.querySelector("#nextMonth");
+  const todayButton = document.querySelector("#todayButton");
   const dayModal = document.querySelector("#dayModal");
   const modalBackdrop = document.querySelector("#modalBackdrop");
   const closeDay = document.querySelector("#closeDay");
@@ -38,14 +47,17 @@
   const dayFocus = document.querySelector("#dayFocus");
   const taskList = document.querySelector("#taskList");
   const editDayButton = document.querySelector("#editDayButton");
-  const dayEditor = document.querySelector("#dayEditor");
-  const dayFocusInput = document.querySelector("#dayFocusInput");
-  const taskEditorList = document.querySelector("#taskEditorList");
-  const newTaskTitle = document.querySelector("#newTaskTitle");
-  const newTaskMeta = document.querySelector("#newTaskMeta");
-  const newTaskType = document.querySelector("#newTaskType");
   const addTaskButton = document.querySelector("#addTaskButton");
-  const resetDayButton = document.querySelector("#resetDayButton");
+  const taskModal = document.querySelector("#taskModal");
+  const taskModalBackdrop = document.querySelector("#taskModalBackdrop");
+  const closeTaskEditorButton = document.querySelector("#closeTaskEditor");
+  const taskEditorEyebrow = document.querySelector("#taskEditorEyebrow");
+  const taskEditorTitle = document.querySelector("#taskEditorTitle");
+  const taskTitleInput = document.querySelector("#taskTitleInput");
+  const taskMetaInput = document.querySelector("#taskMetaInput");
+  const taskTypeInput = document.querySelector("#taskTypeInput");
+  const saveTaskButton = document.querySelector("#saveTaskButton");
+  const deleteTaskButton = document.querySelector("#deleteTaskButton");
   const energyRange = document.querySelector("#energyRange");
   const energyValue = document.querySelector("#energyValue");
   const dayNotes = document.querySelector("#dayNotes");
@@ -76,6 +88,11 @@
   startAutoSync();
 
   profileButton.addEventListener("click", openProfile);
+  previousMonthButton.addEventListener("click", () => changeMonth(-1));
+  nextMonthButton.addEventListener("click", () => changeMonth(1));
+  todayButton.addEventListener("click", goToToday);
+  calendarGrid.addEventListener("touchstart", handleCalendarTouchStart, { passive: true });
+  calendarGrid.addEventListener("touchend", handleCalendarTouchEnd, { passive: true });
   avatarButton.addEventListener("click", () => photoInput.click());
   changePhotoButton.addEventListener("click", () => photoInput.click());
   fitPhotoButton.addEventListener("click", fitCurrentPhoto);
@@ -85,9 +102,13 @@
   closeProfile.addEventListener("click", closeProfileModal);
   profileBackdrop.addEventListener("click", closeProfileModal);
   editDayButton.addEventListener("click", toggleDayEditor);
-  dayFocusInput.addEventListener("input", updateDayFocus);
-  addTaskButton.addEventListener("click", addCustomTask);
-  resetDayButton.addEventListener("click", resetDayPlan);
+  dayFocus.addEventListener("blur", saveDayFocus);
+  dayFocus.addEventListener("keydown", handleFocusKeydown);
+  addTaskButton.addEventListener("click", openAddTaskEditor);
+  taskModalBackdrop.addEventListener("click", closeTaskEditor);
+  closeTaskEditorButton.addEventListener("click", closeTaskEditor);
+  saveTaskButton.addEventListener("click", saveTaskFromEditor);
+  deleteTaskButton.addEventListener("click", deleteTaskFromEditor);
   addGoalButton.addEventListener("click", addGoal);
   saveSyncSettingsButton.addEventListener("click", saveSyncSettings);
   pullSyncButton.addEventListener("click", pullCloudState);
@@ -95,6 +116,10 @@
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    if (taskModal.classList.contains("is-open")) {
+      closeTaskEditor();
+      return;
+    }
     if (activeModal === "day") closeDayModal();
     if (activeModal === "profile") closeProfileModal();
   });
@@ -111,10 +136,10 @@
     saveState();
   });
 
-  function buildDays() {
+  function buildPlannedDays() {
     const result = [];
-    const current = new Date(startDate);
-    while (current <= endDate) {
+    const current = new Date(planStartDate);
+    while (current <= planEndDate) {
       result.push(buildDay(new Date(current)));
       current.setDate(current.getDate() + 1);
     }
@@ -124,7 +149,7 @@
   function buildDay(date) {
     const key = formatKey(date);
     const day = date.getDay();
-    const weekIndex = Math.floor((date - startDate) / 604800000);
+    const weekIndex = Math.floor((date - planStartDate) / 604800000);
     const isSportDay = [1, 3, 6].includes(day);
     const isRestDay = day === 0;
     const isDeepDay = [2, 4].includes(day);
@@ -296,8 +321,28 @@
     };
   }
 
+  function dayForDate(date) {
+    const key = formatKey(date);
+    const planned = plannedDays.find((item) => item.key === key);
+    if (planned) return planned;
+    return {
+      key,
+      date: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+      focus: "Без фокуса",
+      tasks: []
+    };
+  }
+
+  function dayForKey(key) {
+    const parts = key.split("-").map(Number);
+    if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
+      return dayForDate(today);
+    }
+    return dayForDate(new Date(parts[0], parts[1] - 1, parts[2]));
+  }
+
   function ensureDayPlan(key) {
-    const day = days.find((item) => item.key === key) || days[0];
+    const day = dayForKey(key);
     state.dayPlans = state.dayPlans || {};
     if (!state.dayPlans[key]) {
       state.dayPlans[key] = {
@@ -331,15 +376,17 @@
 
   function renderCalendar() {
     calendarGrid.innerHTML = "";
-    const firstOffset = mondayIndex(startDate);
+    monthTitle.textContent = `${calendarMonthNames[visibleMonth.getMonth()]} ${visibleMonth.getFullYear()}`;
+    const monthDays = buildVisibleMonth();
+    const firstOffset = mondayIndex(monthDays[0].date);
     for (let i = 0; i < firstOffset; i += 1) {
       const spacer = document.createElement("div");
       spacer.className = "day-cell is-empty";
       calendarGrid.appendChild(spacer);
     }
 
-    days.forEach((day) => {
-      const entry = ensureEntry(day.key);
+    monthDays.forEach((day) => {
+      const entry = readEntry(day.key);
       const button = document.createElement("button");
       const visibleDay = effectiveDay(day);
       const status = dayStatus(visibleDay, entry);
@@ -356,6 +403,42 @@
     });
   }
 
+  function buildVisibleMonth() {
+    const result = [];
+    const year = visibleMonth.getFullYear();
+    const month = visibleMonth.getMonth();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    for (let dayNumber = 1; dayNumber <= totalDays; dayNumber += 1) {
+      result.push(dayForDate(new Date(year, month, dayNumber)));
+    }
+    return result;
+  }
+
+  function changeMonth(offset) {
+    visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + offset, 1);
+    renderCalendar();
+  }
+
+  function goToToday() {
+    visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    renderCalendar();
+  }
+
+  function handleCalendarTouchStart(event) {
+    const touch = event.changedTouches[0];
+    calendarTouchStart = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleCalendarTouchEnd(event) {
+    if (!calendarTouchStart) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - calendarTouchStart.x;
+    const deltaY = touch.clientY - calendarTouchStart.y;
+    calendarTouchStart = null;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    changeMonth(deltaX < 0 ? 1 : -1);
+  }
+
   function openDay(key) {
     selectedKey = key;
     activeModal = "day";
@@ -368,6 +451,7 @@
   }
 
   function closeDayModal() {
+    closeTaskEditor();
     activeModal = null;
     dayModal.classList.remove("is-open");
     dayModal.setAttribute("aria-hidden", "true");
@@ -625,7 +709,7 @@
   }
 
   function renderDay() {
-    const sourceDay = days.find((item) => item.key === selectedKey) || days[0];
+    const sourceDay = dayForKey(selectedKey);
     const day = effectiveDay(sourceDay);
     const entry = ensureEntry(sourceDay.key);
     const status = dayStatus(day, entry);
@@ -635,8 +719,10 @@
     loadPill.className = `load-pill ${status.kind}`;
     dayFocus.textContent = day.focus;
     editDayButton.textContent = isEditingDay ? "Готово" : "Изменить";
-    dayEditor.hidden = !isEditingDay;
-    dayFocusInput.value = day.focus;
+    dayFocus.contentEditable = isEditingDay ? "true" : "false";
+    dayFocus.classList.toggle("is-editable", isEditingDay);
+    dayFocus.setAttribute("aria-label", isEditingDay ? "Изменить фокус дня" : "Фокус дня");
+    addTaskButton.hidden = !isEditingDay;
     energyRange.value = entry.energy;
     energyValue.textContent = entry.energy;
     dayNotes.value = entry.notes || "";
@@ -645,13 +731,13 @@
     day.tasks.forEach((task) => {
       const row = document.createElement("div");
       const done = Boolean(entry.tasks[task.id]);
-      row.className = `task-row ${done ? "done" : ""}`;
+      row.className = `task-row ${done ? "done" : ""} ${isEditingDay ? "is-editable" : ""}`;
       row.innerHTML = `
-        <button class="check-button" type="button" aria-label="Отметить задачу">${done ? "✓" : ""}</button>
-        <div>
-          <span class="task-title">${task.title}</span>
-          <span class="task-meta">${task.meta}</span>
-        </div>
+        <button class="check-button" type="button" aria-label="Отметить задачу" ${isEditingDay ? "disabled" : ""}>${done ? "✓" : ""}</button>
+        <button class="task-content-button" type="button" ${isEditingDay ? "" : "disabled"} aria-label="Изменить задачу ${escapeAttribute(task.title)}">
+          <span class="task-title">${escapeHtml(task.title)}</span>
+          <span class="task-meta">${escapeHtml(task.meta)}</span>
+        </button>
       `;
       row.querySelector("button").addEventListener("click", () => {
         entry.tasks[task.id] = !entry.tasks[task.id];
@@ -660,110 +746,110 @@
         renderCalendar();
         renderStats();
       });
+      row.querySelector(".task-content-button").addEventListener("click", () => openTaskEditor(day.tasks.indexOf(task)));
       taskList.appendChild(row);
-    });
-
-    renderTaskEditor(day);
-  }
-
-  function renderTaskEditor(day) {
-    taskEditorList.innerHTML = "";
-    if (!isEditingDay) return;
-
-    day.tasks.forEach((task, index) => {
-      const row = document.createElement("div");
-      row.className = "task-edit-row";
-      row.innerHTML = `
-        <input class="task-title-input" type="text" value="${escapeAttribute(task.title)}" aria-label="Название задачи">
-        <input class="task-meta-input" type="text" value="${escapeAttribute(task.meta)}" aria-label="Описание задачи">
-        <select class="task-type-input" aria-label="Тип задачи">
-          <option value="habit">Привычка</option>
-          <option value="work">Работа</option>
-          <option value="sport">Спорт</option>
-        </select>
-        <button class="icon-button remove-button" type="button" aria-label="Удалить задачу" title="Удалить">×</button>
-      `;
-
-      const titleInput = row.querySelector(".task-title-input");
-      const metaInput = row.querySelector(".task-meta-input");
-      const typeInput = row.querySelector(".task-type-input");
-      const removeButton = row.querySelector(".remove-button");
-      typeInput.value = task.type;
-
-      titleInput.addEventListener("input", () => updateTaskField(index, "title", titleInput.value));
-      metaInput.addEventListener("input", () => updateTaskField(index, "meta", metaInput.value));
-      typeInput.addEventListener("change", () => updateTaskField(index, "type", typeInput.value));
-      removeButton.addEventListener("click", () => removeTask(index));
-      taskEditorList.appendChild(row);
     });
   }
 
   function toggleDayEditor() {
     isEditingDay = !isEditingDay;
     if (isEditingDay) ensureDayPlan(selectedKey);
+    if (!isEditingDay) closeTaskEditor();
     renderDay();
   }
 
-  function updateDayFocus() {
+  function saveDayFocus() {
+    if (!isEditingDay) return;
     const plan = ensureDayPlan(selectedKey);
-    plan.focus = dayFocusInput.value;
+    plan.focus = dayFocus.textContent.trim() || "Без фокуса";
     saveState();
     renderCalendar();
-    dayFocus.textContent = plan.focus;
   }
 
-  function updateTaskField(index, field, value) {
+  function handleFocusKeydown(event) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    dayFocus.blur();
+  }
+
+  function openTaskEditor(index) {
     const plan = ensureDayPlan(selectedKey);
-    if (!plan.tasks[index]) return;
-    plan.tasks[index][field] = value;
+    const task = plan.tasks[index];
+    if (!task) return;
+    editingTaskIndex = index;
+    taskEditorEyebrow.textContent = "Задача";
+    taskEditorTitle.textContent = "Изменить задачу";
+    taskTitleInput.value = task.title;
+    taskMetaInput.value = task.meta || "";
+    taskTypeInput.value = task.type || "habit";
+    saveTaskButton.textContent = "Сохранить изменения";
+    deleteTaskButton.hidden = false;
+    showTaskEditor();
+  }
+
+  function openAddTaskEditor() {
+    editingTaskIndex = null;
+    taskEditorEyebrow.textContent = "Новая задача";
+    taskEditorTitle.textContent = "Добавить задачу";
+    taskTitleInput.value = "";
+    taskMetaInput.value = "";
+    taskTypeInput.value = "habit";
+    saveTaskButton.textContent = "Добавить задачу";
+    deleteTaskButton.hidden = true;
+    showTaskEditor();
+  }
+
+  function showTaskEditor() {
+    taskModal.classList.add("is-open");
+    taskModal.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => taskTitleInput.focus());
+  }
+
+  function closeTaskEditor() {
+    taskModal.classList.remove("is-open");
+    taskModal.setAttribute("aria-hidden", "true");
+    editingTaskIndex = null;
+  }
+
+  function saveTaskFromEditor() {
+    const title = taskTitleInput.value.trim();
+    if (!title) {
+      taskTitleInput.focus();
+      return;
+    }
+
+    const plan = ensureDayPlan(selectedKey);
+    if (editingTaskIndex === null) {
+      plan.tasks.push({
+        id: `custom-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        title,
+        meta: taskMetaInput.value.trim(),
+        type: taskTypeInput.value
+      });
+    } else if (plan.tasks[editingTaskIndex]) {
+      plan.tasks[editingTaskIndex].title = title;
+      plan.tasks[editingTaskIndex].meta = taskMetaInput.value.trim();
+      plan.tasks[editingTaskIndex].type = taskTypeInput.value;
+    }
+
     saveState();
+    closeTaskEditor();
     renderDay();
     renderCalendar();
     renderStats();
   }
 
-  function addCustomTask() {
-    const title = newTaskTitle.value.trim();
-    if (!title) return;
-
+  function deleteTaskFromEditor() {
+    if (editingTaskIndex === null) return;
     const plan = ensureDayPlan(selectedKey);
-    const id = `custom-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    plan.tasks.push({
-      id,
-      title,
-      meta: newTaskMeta.value.trim(),
-      type: newTaskType.value
-    });
-
-    newTaskTitle.value = "";
-    newTaskMeta.value = "";
-    newTaskType.value = "habit";
-    saveState();
-    renderDay();
-    renderCalendar();
-    renderStats();
-  }
-
-  function removeTask(index) {
-    const plan = ensureDayPlan(selectedKey);
-    const removed = plan.tasks[index];
-    plan.tasks.splice(index, 1);
+    const removed = plan.tasks[editingTaskIndex];
+    plan.tasks.splice(editingTaskIndex, 1);
     if (removed) {
       const entry = ensureEntry(selectedKey);
       delete entry.tasks[removed.id];
     }
     saveState();
-    renderDay();
-    renderCalendar();
-    renderStats();
-  }
-
-  function resetDayPlan() {
-    if (state.dayPlans) {
-      delete state.dayPlans[selectedKey];
-    }
-    isEditingDay = false;
-    saveState();
+    closeTaskEditor();
     renderDay();
     renderCalendar();
     renderStats();
@@ -778,9 +864,9 @@
     let sportTotal = 0;
     let currentStreak = 0;
 
-    days.forEach((day) => {
+    trackedDays().forEach((day) => {
       const visibleDay = effectiveDay(day);
-      const entry = ensureEntry(day.key);
+      const entry = readEntry(day.key);
       const required = visibleDay.tasks.filter((task) => task.type === "habit");
       if (day.date <= today) {
         const requiredDone = required.length > 0 && required.every((task) => entry.tasks[task.id]);
@@ -810,6 +896,14 @@
     streakScore.textContent = streakText;
     topStreakScore.textContent = streakText;
     streakFlame.className.baseVal = `flame-icon ${streakLevelClass(currentStreak)}`;
+  }
+
+  function trackedDays() {
+    const result = new Map(plannedDays.map((day) => [day.key, day]));
+    Object.keys(state.dayPlans || {}).forEach((key) => {
+      result.set(key, dayForKey(key));
+    });
+    return Array.from(result.values()).sort((left, right) => left.date - right.date);
   }
 
   function renderGoals() {
@@ -1105,11 +1199,19 @@
       .replace(/>/g, "&gt;");
   }
 
+  function escapeHtml(value) {
+    return escapeAttribute(value).replace(/'/g, "&#39;");
+  }
+
   function ensureEntry(key) {
     if (!state[key]) {
       state[key] = { tasks: {}, energy: 5, notes: "" };
     }
     return state[key];
+  }
+
+  function readEntry(key) {
+    return state[key] || { tasks: {}, energy: 5, notes: "" };
   }
 
   function loadState() {
@@ -1130,12 +1232,6 @@
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     return `${date.getFullYear()}-${month}-${day}`;
-  }
-
-  function clampDate(date, min, max) {
-    if (date < min) return new Date(min);
-    if (date > max) return new Date(max);
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
   }
 
   function formatDate(date) {
