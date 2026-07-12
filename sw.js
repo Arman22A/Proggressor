@@ -1,4 +1,4 @@
-const cacheName = "month-progress-v24";
+const cacheName = "crest-v25";
 const assets = [
   "./",
   "./index.html",

@@ -1,6 +1,7 @@
 {
-  "name": "Месяц прогресса",
-  "short_name": "Прогресс",
+  "name": "Crest",
+  "short_name": "Crest",
+  "description": "Личный календарь целей и прогресса",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f7f8f3",
