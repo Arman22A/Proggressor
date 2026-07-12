@@ -1,11 +1,14 @@
-const cacheName = "month-progress-v23";
+const cacheName = "month-progress-v24";
 const assets = [
   "./",
   "./index.html",
   "./styles.css",
   "./script.js",
   "./manifest.webmanifest",
-  "./icon.svg"
+  "./icon.ico",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./apple-touch-icon.png"
 ];
 
 self.addEventListener("install", (event) => {
