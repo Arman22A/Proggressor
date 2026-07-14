@@ -1522,6 +1522,11 @@
 
     try {
       const result = await cloudRequest("pull", settings);
+      if (state.syncCode) {
+        isCloudBusy = false;
+        setSyncBusy(false);
+        return await pushCloudState({ auto: true });
+      }
       if (!result.exists && options.pushIfEmpty) {
         isCloudBusy = false;
         setSyncBusy(false);
@@ -1943,7 +1948,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=29").then((registration) => registration.update()).catch(() => {});
+      navigator.serviceWorker.register("sw.js?v=30").then((registration) => registration.update()).catch(() => {});
     });
   }
 })();

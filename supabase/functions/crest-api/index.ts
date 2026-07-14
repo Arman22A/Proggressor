@@ -49,12 +49,21 @@ async function pushProgress(userId: string, body: Record<string, unknown>, heade
   const syncId = userSyncId(userId);
   const incoming = isObject(body.payload) ? body.payload : {};
   const baseRevision = Number(body.baseRevision) || 0;
-  let current = await progressRow(userId);
+  const accountCurrent = await progressRow(userId);
+  let current = accountCurrent;
   let legacySyncId = "";
   const legacyCode = String(body.legacyCode || "").trim();
-  if (!current && legacyCode.length >= 8) {
-    legacySyncId = await sha256(legacyCode);
-    current = await legacyProgressRow(legacySyncId);
+  if (legacyCode.length >= 8) {
+    const candidateLegacySyncId = await sha256(legacyCode);
+    const legacy = await legacyProgressRow(candidateLegacySyncId);
+    if (legacy) {
+      legacySyncId = candidateLegacySyncId;
+      current = accountCurrent ? {
+        payload: mergeProgress(accountCurrent.payload || {}, legacy.payload || {}, false),
+        revision: Math.max(Number(accountCurrent.revision) || 0, Number(legacy.revision) || 0),
+        updated_at: accountCurrent.updated_at
+      } : legacy;
+    }
   }
   const payload = current
     ? mergeProgress(current.payload || {}, incoming, baseRevision === Number(current.revision))
@@ -63,7 +72,7 @@ async function pushProgress(userId: string, body: Record<string, unknown>, heade
   const updatedAt = new Date().toISOString();
 
   let error;
-  if (current && !legacySyncId) {
+  if (accountCurrent) {
     ({ error } = await supabase
       .from("progress_sync")
       .update({ payload, revision, updated_at: updatedAt })
